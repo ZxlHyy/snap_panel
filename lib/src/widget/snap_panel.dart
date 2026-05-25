@@ -754,19 +754,21 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   Widget _buildBody(double containerW, double containerH) {
     // 视差效果使用 RepaintBoundary 隔离重绘
     if (widget.parallaxEnabled) {
-      return RepaintBoundary(
-        child: ValueListenableBuilder<double>(
-          valueListenable: _ac,
-          builder: (context, panelValue, child) {
-            final range = widget.maxHeight - widget.minHeight;
-            final offset = widget.slideDirection == SnapPanelSlideDirection.up
-                ? -panelValue * range * widget.parallaxOffset
-                : panelValue * range * widget.parallaxOffset;
-            return Positioned.fill(
-              top: offset,
-              child: child!,  // child 来自 ValueListenableBuilder，此时一定非 null
-            );
-          },
+      // Positioned 必须是 Stack 的直接子元素
+      // RepaintBoundary 包裹在 SizedBox 外层，用于隔离重绘
+      return ValueListenableBuilder<double>(
+        valueListenable: _ac,
+        builder: (context, panelValue, child) {
+          final range = widget.maxHeight - widget.minHeight;
+          final offset = widget.slideDirection == SnapPanelSlideDirection.up
+              ? -panelValue * range * widget.parallaxOffset
+              : panelValue * range * widget.parallaxOffset;
+          return Positioned.fill(
+            top: offset,
+            child: child!,
+          );
+        },
+        child: RepaintBoundary(
           child: SizedBox(
             width: containerW,
             height: containerH,

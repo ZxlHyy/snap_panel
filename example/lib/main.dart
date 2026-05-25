@@ -56,6 +56,7 @@ class _SnapPanelTestPageState extends State<SnapPanelTestPage> {
             backdropEnabled: true,
             backdropTapClosesPanel: true,
             // renderPanelSheet: false,
+            // parallaxEnabled: true,
             backdropOpacity: 0.8,
             backdropColor: Colors.black,
             dragHandle: const SnapPanelDragHandle(),
