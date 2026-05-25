@@ -1,5 +1,7 @@
 # ai_panel
 
+[中文文档](README_CN.md)
+
 A highly customizable Flutter sliding panel component, similar to iOS Maps-style bottom sheet.
 
 ## Features
