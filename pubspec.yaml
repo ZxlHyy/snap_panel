@@ -1,9 +1,9 @@
-name: ai_panel
+name: snap_panel
 description: "A highly customizable sliding panel component for Flutter, supporting multi-snap points, drag gestures, spring animations, and scroll linkage."
 version: 0.0.1
-homepage: https://github.com/hesheshuo/ai_panel
-repository: https://github.com/hesheshuo/ai_panel
-issue_tracker: https://github.com/hesheshuo/ai_panel/issues
+homepage: https://gitee.com/wodexiaohouzi/snap_panel
+repository: https://gitee.com/wodexiaohouzi/snap_panel
+issue_tracker: https://gitee.com/wodexiaohouzi/snap_panel/issues
 
 environment:
   sdk: ^3.0.0
