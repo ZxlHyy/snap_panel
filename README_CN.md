@@ -1,5 +1,7 @@
 # ai_panel
 
+[English Documentation](README.md)
+
 高度可定制的 Flutter 滑动面板组件，类似 iOS Maps 风格的底部抽屉。
 
 ## 特性
