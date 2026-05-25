@@ -59,7 +59,7 @@ class SnapPanelSpring {
   const SnapPanelSpring({
     this.mass = 1.0,
     this.stiffness = 500.0,
-    this.dampingRatio = 1.0,
+    this.dampingRatio = 0.85,
   });
 
   SpringDescription get description => SpringDescription.withDampingRatio(
