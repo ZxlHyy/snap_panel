@@ -10,7 +10,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 
-import 'package:ai_panel/ai_panel.dart';
+import 'package:snap_panel/snap_panel.dart';
 
 void main() {
   // IntegrationTestWidgetsFlutterBinding.ensureInitialized();

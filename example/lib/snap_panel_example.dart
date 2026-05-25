@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:ai_panel/ai_panel.dart';
+import 'package:snap_panel/snap_panel.dart';
 
 class SnapPanelExample extends StatefulWidget {
   const SnapPanelExample({super.key});

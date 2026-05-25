@@ -1,6 +1,6 @@
 ## 0.0.1
 
-* ai_panel 初始版本发布
+* snap_panel 初始版本发布
 * SnapPanel: 高度可定制的滑动面板，支持多停靠点吸附
 * SnapPanelController: 面板控制器，支持 expand/collapse/animateTo 等程序化控制
 * SnapPanelDragHandle: 内置拖拽手柄组件

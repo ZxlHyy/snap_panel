@@ -1,5 +1,5 @@
 import 'package:flutter/physics.dart';
-import '../widget/snap_panel.dart';
+import '../../snap_panel.dart';
 
 /// 物理引擎
 ///

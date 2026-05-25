@@ -1,6 +1,6 @@
-# ai_panel_example
+# snap_panel_example
 
-Demonstrates how to use the ai_panel plugin.
+Demonstrates how to use the snap_panel plugin.
 
 ## Getting Started
 

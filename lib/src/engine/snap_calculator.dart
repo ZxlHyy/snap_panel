@@ -1,4 +1,4 @@
-import '../widget/snap_panel.dart';
+import '../../snap_panel.dart';
 
 /// 停靠点计算器
 ///

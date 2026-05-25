@@ -2,9 +2,9 @@
 
 import 'package:flutter/material.dart';
 
-import '../engine/snap_calculator.dart';
-import '../engine/physics_engine.dart';
-import '../engine/gesture_engine.dart';
+import 'src/engine/snap_calculator.dart';
+import 'src/engine/physics_engine.dart';
+import 'src/engine/gesture_engine.dart';
 
 // ==================== 枚举 ====================
 

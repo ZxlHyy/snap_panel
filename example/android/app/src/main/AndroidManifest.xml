@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application
-        android:label="ai_panel_example"
+        android:label="snap_panel_example"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

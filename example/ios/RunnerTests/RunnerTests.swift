@@ -3,7 +3,7 @@ import UIKit
 import XCTest
 
 
-@testable import ai_panel
+@testable import snap_panel
 
 // This demonstrates a simple unit test of the Swift portion of this plugin's implementation.
 //

@@ -1,4 +1,4 @@
-# ai_panel
+# snap_panel
 
 [中文文档](README_CN.md)
 
@@ -18,13 +18,13 @@ A highly customizable Flutter sliding panel component, similar to iOS Maps-style
 
 ```yaml
 dependencies:
-  ai_panel: ^0.0.1
+  snap_panel: ^0.0.1
 ```
 
 ## Quick Start
 
 ```dart
-import 'package:ai_panel/ai_panel.dart';
+import 'package:snap_panel/snap_panel.dart';
 
 SnapPanel(
   // Content to display when expanded
@@ -124,7 +124,7 @@ lib/
 │       ├── snap_calculator.dart   # Snap point calculator
 │       ├── physics_engine.dart    # Physics engine
 │       └── gesture_engine.dart    # Gesture engine
-└── ai_panel.dart  # Main export
+└── snap_panel.dart  # Main export
 ```
 
 ## License

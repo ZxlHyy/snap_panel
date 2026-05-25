@@ -1,6 +1,6 @@
 ## 0.0.1
 
-* Initial release of ai_panel
+* Initial release of snap_panel
 * SnapPanel: Highly customizable sliding panel with multi-snap points
 * SnapPanelController: Programmatic control (expand, collapse, animateTo)
 * SnapPanelDragHandle: Built-in drag handle widget

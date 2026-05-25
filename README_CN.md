@@ -1,4 +1,4 @@
-# ai_panel
+# snap_panel
 
 [English Documentation](README.md)
 
@@ -18,13 +18,13 @@
 
 ```yaml
 dependencies:
-  ai_panel: ^0.0.1
+  snap_panel: ^0.0.1
 ```
 
 ## 快速开始
 
 ```dart
-import 'package:ai_panel/ai_panel.dart';
+import 'package:snap_panel/snap_panel.dart';
 
 SnapPanel(
   // 展开时显示的内容
@@ -124,7 +124,7 @@ lib/
 │       ├── snap_calculator.dart   # 停靠点计算器
 │       ├── physics_engine.dart    # 物理引擎
 │       └── gesture_engine.dart    # 手势引擎
-└── ai_panel.dart  # 主导出
+└── snap_panel.dart  # 主导出
 ```
 
 ## 许可证
