@@ -134,8 +134,6 @@ class _SnapPanelExampleState extends State<SnapPanelExample> {
           _actionChip('30%', () => _controller.animateTo(0.3)),
           _actionChip('60%', () => _controller.animateTo(0.6)),
           _actionChip('展开', () => _controller.expand()),
-          _actionChip('隐藏', () => _controller.hide()),
-          _actionChip('显示', () => _controller.show()),
         ],
       ),
     );

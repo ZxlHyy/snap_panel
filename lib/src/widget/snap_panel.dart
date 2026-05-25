@@ -126,18 +126,6 @@ class SnapPanelController {
     return _state!._currentPanelState == SnapPanelState.expanded;
   }
 
-  /// 显示面板（收起状态）
-  Future<void> show() {
-    _assertAttached();
-    return _state!._show();
-  }
-
-  /// 隐藏面板（完全移出屏幕）
-  Future<void> hide() {
-    _assertAttached();
-    return _state!._hide();
-  }
-
   /// 收起面板到 minHeight
   Future<void> collapse() {
     _assertAttached();
@@ -154,7 +142,7 @@ class SnapPanelController {
   Future<void> animateTo(
       double position, {
         Duration? duration,
-        Curve curve = Curves.easeOut,
+        Curve curve = Curves.easeOutCubic,
       }) {
     _assertAttached();
     return _state!._animateTo(
@@ -338,7 +326,7 @@ class SnapPanel extends StatefulWidget {
     this.slideDirection = SnapPanelSlideDirection.up,
     this.flingVelocity = 5.0,
     this.animationDuration = const Duration(milliseconds: 300),
-    this.animationCurve = Curves.easeOut,
+    this.animationCurve = Curves.easeOutCubic,
     this.spring = const SnapPanelSpring(),
     this.backdropEnabled = false,
     this.backdropColor = Colors.black,
@@ -947,7 +935,7 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   Future<void> _animateTo(
       double target, {
         Duration? duration,
-        Curve curve = Curves.easeOut,
+        Curve curve = Curves.easeOutCubic,
       }) async {
     assert(target >= 0.0 && target <= 1.0);
 
@@ -987,12 +975,14 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
 
   Future<void> _collapse() => _animateTo(0.0);
 
+  // ignore: unused_element
   Future<void> _hide() {
     return _ac.fling(velocity: -1.0).then((_) {
       if (mounted) setState(() => _isPanelVisible = false);
     });
   }
 
+  // ignore: unused_element
   Future<void> _show() {
     setState(() => _isPanelVisible = true);
     return _collapse();

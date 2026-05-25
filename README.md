@@ -1,151 +1,134 @@
 # ai_panel
 
-高度可定制的 Flutter 滑动面板组件，类似 iOS Maps 风格的底部抽屉。
+A highly customizable Flutter sliding panel component, similar to iOS Maps-style bottom sheet.
 
-## 特性
+## Features
 
-- **多停靠点吸附** - 支持自定义停靠点，面板会自动吸附到最近的位置
-- **流畅的拖拽手势** - 支持垂直拖拽，带有速度追踪和惯性滑动
-- **弹簧动画** - 可配置的弹簧物理参数，支持回弹效果
-- **滚动联动** - 面板内容与系统滚动视图无缝联动
-- **背景遮罩** - 可选的半透明遮罩，点击可收起面板
-- **视差效果** - 主体内容可跟随面板滑动产生视差
-- **高性能** - 使用 `AnimatedBuilder` + `Transform` + `RepaintBoundary` 优化渲染
+- **Multi-snap points** - Define custom snap points where the panel automatically docks
+- **Smooth drag gestures** - Vertical dragging with velocity tracking and inertial fling
+- **Spring animations** - Configurable spring physics parameters with bounce effects
+- **Scroll linkage** - Seamless integration with scrollable content inside the panel
+- **Background backdrop** - Optional semi-transparent overlay with tap-to-close
+- **Parallax effects** - Background content follows panel movement with parallax offset
+- **High performance** - Optimized with `AnimatedBuilder` + `Transform` + `RepaintBoundary`
 
-## 安装
+## Installation
 
 ```yaml
 dependencies:
   ai_panel: ^0.0.1
 ```
 
-## 快速开始
-
-### SnapPanel - 滑动面板
+## Quick Start
 
 ```dart
 import 'package:ai_panel/ai_panel.dart';
 
 SnapPanel(
-  // 展开时显示的内容
+  // Content to display when expanded
   panel: MyPanelContent(),
 
-  // 或者使用 Builder（支持滚动联动）
+  // Or use Builder for scroll linkage support
   // panelBuilder: (scrollController) => MyScrollableContent(controller: scrollController),
 
-  // 收起时显示的折叠内容
+  // Collapsed state content
   collapsed: MyCollapsedBar(),
 
-  // 面板背后的主体内容
+  // Background content behind the panel
   body: MyBackgroundContent(),
 
-  // 收起/展开高度
+  // Collapsed / expanded height
   minHeight: 80,
   maxHeight: 500,
 
-  // 停靠点（0.0 = 收起, 1. = 展开）
+  // Snap points (0.0 = collapsed, 1.0 = expanded)
   snapPoints: const [
     SnapPanelSnapPoint(position: 0.3),
     SnapPanelSnapPoint(position: 0.6),
   ],
 
-  // 启用背景遮罩
+  // Enable backdrop
   backdropEnabled: true,
   backdropTapClosesPanel: true,
 
-  // 启用视差效果
+  // Enable parallax effect
   parallaxEnabled: true,
   parallaxOffset: 0.2,
 
-  // 状态变化回调
+  // State change callbacks
   onPanelStateChanged: (state) {
-    print('面板状态: $state');
+    print('Panel state: $state');
   },
   onPanelSlide: (position) {
-    print('面板位置: $position');
+    print('Panel position: $position');
   },
 )
 ```
 
-### SnapSheet - 简化版底部抽屉
-
-```dart
-import 'package:ai_panel/ai_panel.dart';
-
-SnapSheet(
-  snapPoints: const [0.3, 0.6, 1.0],
-  child: MyContent(),
-)
-```
-
-## 控制器
+## Controller
 
 ```dart
 final controller = SnapPanelController();
 
-// 展开
+// Expand to maxHeight
 controller.expand();
 
-// 收起
+// Collapse to minHeight
 controller.collapse();
 
-// 动画到指定位置
+// Animate to a specific position
 controller.animateTo(0.5);
 
-// 显示/隐藏（完全移出屏幕）
+// Show / hide (completely off-screen)
 controller.hide();
 controller.show();
 ```
 
-## 自定义停靠点
+## Custom Snap Points
 
 ```dart
 SnapPanelSnapPoint(
-  position: 0.5, // 0.0 ~ 1.0 之间的值
-  onReached: (state) => true, // 到达此点时是否触发回调
+  position: 0.5, // Value between 0.0 and 1.0
+  onReached: (state) => true, // Callback when this point is reached
 )
 ```
 
-## 自定义弹簧参数
+## Custom Spring Parameters
 
 ```dart
 spring: SnapPanelSpring(
-  mass: 1.0,        // 质量，影响惯性
-  stiffness: 500.0, // 刚度，影响回弹速度
-  dampingRatio: 1.0, // 阻尼比，1.0=临界阻尼，<1.0=有回弹
+  mass: 1.0,         // Mass, affects inertia
+  stiffness: 500.0,  // Stiffness, affects snap-back speed
+  dampingRatio: 1.0, // Damping ratio: 1.0=critical, <1.0=bouncy
 )
 ```
 
-## 组件说明
+## Widget Reference
 
-| 组件 | 说明 |
-|------|------|
-| `SnapPanel` | 完整的滑动面板组件，支持停靠点、遮罩、视差等 |
-| `SnapSheet` | 简化的底部抽屉，适合简单场景 |
-| `SnapPanelController` | 面板控制器，用于程序化控制 |
-| `SnapPanelDragHandle` | 拖拽手柄组件 |
-| `SnapPanelSnapPoint` | 停靠点配置 |
-| `SnapPanelSpring` | 弹簧物理参数 |
-| `SnapPanelSlideDirection` | 滑动方向（上/下） |
-| `SnapPanelState` | 面板状态（收起/半开/展开） |
+| Widget | Description |
+|--------|-------------|
+| `SnapPanel` | Full-featured sliding panel with snap points, backdrop, parallax, etc. |
+| `SnapPanelController` | Controller for programmatic panel manipulation |
+| `SnapPanelDragHandle` | Built-in drag handle widget |
+| `SnapPanelSnapPoint` | Snap point configuration |
+| `SnapPanelSpring` | Spring physics parameters |
+| `SnapPanelSlideDirection` | Slide direction (up / down) |
+| `SnapPanelState` | Panel state (collapsed / half / expanded) |
 
-## 架构
+## Architecture
 
 ```
 lib/
 ├── src/
 │   ├── widget/
-│   │   ├── snap_panel.dart    # 主组件
-│   │   └── snap_sheet.dart    # 简化版抽屉
-│   ├── controller/
-│   │   └── snap_sheet_controller.dart
+│   │   └── snap_panel.dart        # Main widget
 │   └── engine/
-│       ├── snap_calculator.dart   # 停靠点计算器
-│       ├── physics_engine.dart    # 物理引擎
-│       └── gesture_engine.dart    # 手势引擎
-└── ai_panel.dart  # 主导出
+│       ├── snap_calculator.dart   # Snap point calculator
+│       ├── physics_engine.dart    # Physics engine
+│       └── gesture_engine.dart    # Gesture engine
+└── ai_panel.dart  # Main export
 ```
 
-## 许可证
+## License
 
 MIT
