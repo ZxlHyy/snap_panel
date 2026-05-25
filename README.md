@@ -80,10 +80,6 @@ controller.collapse();
 
 // Animate to a specific position
 controller.animateTo(0.5);
-
-// Show / hide (completely off-screen)
-controller.hide();
-controller.show();
 ```
 
 ## Custom Snap Points

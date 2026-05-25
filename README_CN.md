@@ -80,10 +80,6 @@ controller.collapse();
 
 // 动画到指定位置
 controller.animateTo(0.5);
-
-// 显示/隐藏（完全移出屏幕）
-controller.hide();
-controller.show();
 ```
 
 ## 自定义停靠点
