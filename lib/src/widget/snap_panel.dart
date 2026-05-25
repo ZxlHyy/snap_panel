@@ -1,8 +1,10 @@
 // 高度可定制的滑动面板组件
 
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/physics.dart';
+
+import '../engine/snap_calculator.dart';
+import '../engine/physics_engine.dart';
+import '../engine/gesture_engine.dart';
 
 // ==================== 枚举 ====================
 
@@ -100,7 +102,7 @@ class SnapPanelController {
     return _state!._panelPosition;
   }
 
-  /// 当前面板状态
+  /// 当前面板状态（从 position 派生，单一数据源）
   SnapPanelState get panelState {
     _assertAttached();
     return _state!._currentPanelState;
@@ -370,47 +372,34 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   /// 面板是否可见（用于 hide/show）
   bool _isPanelVisible = true;
 
-  /// 面板当前状态
-  SnapPanelState _currentPanelState = SnapPanelState.collapsed;
-
   /// 内部滚动是否启用
   bool _scrollingEnabled = false;
 
-  /// 速度追踪器（每次手势开始时重建，避免残留数据影响速度计算）
-  VelocityTracker _velocityTracker =
-  VelocityTracker.withKind(PointerDeviceKind.touch);
+  // ==================== 引擎实例 ====================
 
-  /// 手势起始位置（用于判断是否为垂直手势）
-  PointerDownEvent? _pointerDownEvent;
+  /// 停靠点计算器
+  final SnapCalculator _snapCalculator = SnapCalculator();
 
-  /// 是否已确认为垂直手势
-  bool _isVerticalGesture = false;
+  /// 物理引擎
+  late PhysicsEngine _physicsEngine;
 
-  /// 拖拽累计位移（用于速度为零时判断用户方向意图）
-  double _accumulatedDragDelta = 0.0;
+  /// 手势引擎
+  final GestureEngine _gestureEngine = GestureEngine();
 
-  /// 计算后的停靠点列表（包含 0.0 和 1.0）
-  late List<double> _computedSnapPoints;
+  // ==================== 缓存 ====================
 
-  // ==================== 缓存的装饰对象 ====================
+  /// 缓存的面板内容（避免 panelBuilder 重复构建）
+  Widget? _cachedPanelContent;
 
-  /// 缓存的面板装饰（仅在装饰参数变化时重建）
+  /// 缓存的装饰参数
   BoxDecoration? _cachedDecoration;
   List<BoxShadow>? _cachedBoxShadow;
   Border? _cachedBorder;
   BorderRadiusGeometry? _cachedBorderRadius;
   Color? _cachedColor;
-
-  /// 缓存的默认阴影
-  List<BoxShadow>? _defaultShadowValue;
   double? _cachedElevation;
 
-  /// 缓存的第一个停靠点值（用于收起态透明度计算）
-  double _cachedFirstSnapPoint = 1.0;
-
-  // ==================== 缓存的容器尺寸 ====================
-
-  /// 缓存的容器尺寸（避免每帧调用 MediaQuery）
+  /// 缓存的容器尺寸
   double _cachedContainerW = 0.0;
   double _cachedContainerH = 0.0;
   double _cachedContentW = 0.0;
@@ -421,12 +410,12 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   void initState() {
     super.initState();
 
-    _computeSnapPoints();
-    _currentPanelState = widget.defaultState;
+    _snapCalculator.compute(widget.snapPoints);
+    _physicsEngine = PhysicsEngine(spring: widget.spring);
 
     _ac = AnimationController.unbounded(
       vsync: this,
-      value: _stateToValue(widget.defaultState),
+      value: _snapCalculator.stateToValue(widget.defaultState),
     )..addListener(_onAnimationTick);
 
     _sc = ScrollController();
@@ -441,12 +430,19 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
 
     // 停靠点变化时重新计算
     if (oldWidget.snapPoints != widget.snapPoints) {
-      _computeSnapPoints();
+      _snapCalculator.compute(widget.snapPoints);
+    }
+
+    // 弹簧参数变化时更新物理引擎
+    if (oldWidget.spring.mass != widget.spring.mass ||
+        oldWidget.spring.stiffness != widget.spring.stiffness ||
+        oldWidget.spring.dampingRatio != widget.spring.dampingRatio) {
+      _physicsEngine = PhysicsEngine(spring: widget.spring);
     }
 
     // 默认状态变化时更新
     if (oldWidget.defaultState != widget.defaultState && mounted) {
-      final targetValue = _stateToValue(widget.defaultState);
+      final targetValue = _snapCalculator.stateToValue(widget.defaultState);
       _ac.animateTo(targetValue, duration: widget.animationDuration, curve: widget.animationCurve);
     }
 
@@ -454,6 +450,22 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?._detach();
       widget.controller?._attach(this);
+    }
+
+    // 内容变化时清除缓存
+    if (oldWidget.panel != widget.panel ||
+        oldWidget.panelBuilder != widget.panelBuilder) {
+      _cachedPanelContent = null;
+    }
+
+    // 装饰变化时清除缓存
+    if (oldWidget.color != widget.color ||
+        oldWidget.border != widget.border ||
+        oldWidget.borderRadius != widget.borderRadius ||
+        oldWidget.boxShadow != widget.boxShadow ||
+        oldWidget.elevation != widget.elevation) {
+      _cachedDecoration = null;
+      _cachedBoxShadow = null;
     }
   }
 
@@ -465,94 +477,29 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
     super.dispose();
   }
 
-  // ==================== 停靠点计算 ====================
+  // ==================== 属性访问器 ====================
 
-  void _computeSnapPoints() {
-    final points = <double>{0.0, 1.0};
-    if (widget.snapPoints != null) {
-      for (final sp in widget.snapPoints!) {
-        points.add(sp.position);
-      }
-    }
-    _computedSnapPoints = points.toList()..sort();
-    // 更新缓存的第一个停靠点
-    _updateCachedFirstSnapPoint();
+  /// 当前面板位置（单一数据源）
+  double get _panelPosition => _ac.value.clamp(0.0, 1.0);
+
+  set _panelPosition(double value) {
+    assert(value >= 0.0 && value <= 1.0);
+    _ac.value = value;
   }
 
-  /// 更新缓存的第一个停靠点值
-  void _updateCachedFirstSnapPoint() {
-    final snapPoints = _computedSnapPoints.where((p) => p > 0.0).toList();
-    _cachedFirstSnapPoint = snapPoints.isEmpty ? 1.0 : snapPoints.first;
+  /// 当前面板状态（从 position 派生，不单独存储）
+  SnapPanelState get _currentPanelState {
+    final state = _snapCalculator.getStateFromPosition(_panelPosition);
+    return state ?? SnapPanelState.half; // 默认返回 half
   }
 
-  /// 获取面板装饰（带缓存）
-  BoxDecoration _getPanelDecoration() {
-    // 检查是否需要重新创建装饰
-    if (_cachedDecoration == null ||
-        _cachedBorder != widget.border ||
-        _cachedBorderRadius != widget.borderRadius ||
-        _cachedBoxShadow != widget.boxShadow ||
-        _cachedColor != widget.color ||
-        _cachedElevation != widget.elevation) {
-      _cachedBorder = widget.border;
-      _cachedBorderRadius = widget.borderRadius;
-      _cachedBoxShadow = widget.boxShadow;
-      _cachedColor = widget.color;
-      _cachedElevation = widget.elevation;
-
-      _cachedDecoration = BoxDecoration(
-        border: widget.border,
-        borderRadius: widget.borderRadius,
-        boxShadow: widget.boxShadow ?? _getDefaultShadow(),
-        color: widget.color,
-      );
-    }
-    return _cachedDecoration!;
-  }
-
-  /// 获取默认阴影（带缓存）
-  List<BoxShadow> _getDefaultShadow() {
-    if (_defaultShadowValue == null || _cachedElevation != widget.elevation) {
-      _cachedElevation = widget.elevation;
-      if (widget.elevation != null) {
-        _defaultShadowValue = [
-          BoxShadow(
-            blurRadius: widget.elevation! * 2,
-            offset: Offset(0, -widget.elevation!),
-            color: Colors.black.withValues(alpha: 0.2),
-          ),
-        ];
-      } else {
-        _defaultShadowValue = const [
-          BoxShadow(
-            blurRadius: 8.0,
-            color: Color.fromRGBO(0, 0, 0, 0.25),
-          ),
-        ];
-      }
-    }
-    return _defaultShadowValue!;
-  }
-
-  double _stateToValue(SnapPanelState state) {
-    switch (state) {
-      case SnapPanelState.collapsed:
-        return 0.0;
-      case SnapPanelState.half:
-      // 如果有中间停靠点就用，否则取中间值
-        final midPoints = _computedSnapPoints
-            .where((p) => p > 0.0 && p < 1.0)
-            .toList();
-        return midPoints.isEmpty ? 0.5 : midPoints.first;
-      case SnapPanelState.expanded:
-        return 1.0;
-    }
-  }
+  bool get _isAnimating => _ac.isAnimating;
+  bool get _isExpanded => _currentPanelState == SnapPanelState.expanded;
 
   // ==================== 动画监听 ====================
 
   void _onAnimationTick() {
-    final position = _ac.value;
+    final position = _panelPosition;
     widget.onPanelSlide?.call(position);
 
     // 检测是否到达某个停靠点
@@ -560,37 +507,28 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   }
 
   void _checkSnapPointReached(double position) {
-    const tolerance = 0.02;
-    SnapPanelState? newState;
+    final newState = _snapCalculator.getStateFromPosition(position);
+    if (newState == null) return;
 
-    if ((position - 0.0).abs() < tolerance) {
-      newState = SnapPanelState.collapsed;
-    }else if ((position - 1.0).abs() < tolerance) {
-      newState = SnapPanelState.expanded;
-    }else if (_computedSnapPoints.any((p) => p > 0.0 && p < 1.0 && (position - p).abs() < tolerance)) {
-      newState = SnapPanelState.half;
+    // 使用 controller 获取之前的状态
+    final oldState = widget.controller?.panelState ?? _currentPanelState;
+    if (newState == oldState) return;
+
+    // 统一回调
+    widget.onPanelStateChanged?.call(newState);
+
+    // 兼容分散回调
+    switch (newState) {
+      case SnapPanelState.collapsed:
+        widget.onPanelCollapsed?.call();
+        break;
+      case SnapPanelState.expanded:
+        widget.onPanelExpanded?.call();
+        break;
+      case SnapPanelState.half:
+        widget.onPanelHalf?.call();
+        break;
     }
-
-    if (newState != null && newState != _currentPanelState) {
-      _currentPanelState = newState;
-
-      // 统一回调
-      widget.onPanelStateChanged?.call(newState);
-
-      // 兼容分散回调
-      switch (newState) {
-        case SnapPanelState.collapsed:
-          widget.onPanelCollapsed?.call();
-          break;
-        case SnapPanelState.expanded:
-          widget.onPanelExpanded?.call();
-          break;
-        case SnapPanelState.half:
-          widget.onPanelHalf?.call();
-          break;
-      }
-    }
-
   }
 
   // ==================== 滚动监听 ====================
@@ -607,8 +545,8 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   // ==================== 手势处理 ====================
 
   void _onGestureSlide(double dy) {
-    // 累计拖拽位移（用于速度为零时判断用户方向意图）
-    _accumulatedDragDelta += dy;
+    // 累计拖拽位移
+    _gestureEngine.addDragDelta(dy);
 
     if (!_scrollingEnabled) {
       final delta = dy / (widget.maxHeight - widget.minHeight);
@@ -644,77 +582,29 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
     final panelRange = widget.maxHeight - widget.minHeight;
     final currentValue = _ac.value;
 
-    // 将物理速度转换为面板位置速度（0.0~1.0 范围）
-    double visualVelocity;
-    if (widget.slideDirection == SnapPanelSlideDirection.up) {
-      visualVelocity = -dy / panelRange;
-    } else {
-      visualVelocity = dy / panelRange;
-    }
-
-    // 判断手势方向：优先用速度，速度太小时用累计位移兜底
-    // 这解决了在中间位置向上抛时 _velocityTracker 返回零的问题
-    int direction; // 1 = 展开方向, -1 = 收起方向, 0 = 不移动
-    double speed;
-
-    if (visualVelocity.abs() > 0.01) {
-      // 速度明确，用速度方向
-      direction = visualVelocity > 0 ? 1 : -1;
-      speed = visualVelocity;
-    } else if (_accumulatedDragDelta.abs() > 10.0) {
-      // 速度为零但累计位移超过阈值，用累计位移方向判断意图
-      // 对于从中间向上抛的场景：向上拖拽时 dy < 0, _accumulatedDragDelta < 0
-      // slideDirection=up 时，dy < 0 表示向上（展开方向）
-      if (widget.slideDirection == SnapPanelSlideDirection.up) {
-        direction = _accumulatedDragDelta < 0 ? 1 : -1;
-      } else {
-        direction = _accumulatedDragDelta > 0 ? 1 : -1;
-      }
-      // 使用一个适中的默认速度，确保动画能到达停靠点
-      speed = 0.5;
-    } else {
-      // 几乎没有拖动，不移动
-      direction = 0;
-      speed = 0.0;
-    }
+    // 使用物理引擎计算方向和速度
+    final result = _physicsEngine.calculateDirection(
+      velocityPixelsPerSecond: dy,
+      panelRange: panelRange,
+      accumulatedDragDelta: _gestureEngine.accumulatedDragDelta,
+      slideDirection: widget.slideDirection,
+    );
 
     // 重置累计位移
-    _accumulatedDragDelta = 0.0;
+    _gestureEngine.resetAccumulatedDelta();
 
-    if (direction == 0) return;
+    if (result.direction == 0) return;
 
     // 根据方向找目标停靠点
-    final target = direction > 0 ? _findNextSnapUp() : _findNextSnapDown();
+    final target = _snapCalculator.findTargetSnap(currentValue, result.direction);
 
     // 如果目标就是当前位置（已到边界），不做任何动画
     if ((target - currentValue).abs() < 0.01) return;
 
-    _flingTo(target, speed);
-  }
-
-  /// 找下一个更高的停靠点
-  double _findNextSnapUp() {
-    final current = _ac.value;
-    for (final p in _computedSnapPoints) {
-      if (p > current) return p;
-    }
-    return 1.0;
-  }
-
-  /// 找下一个更低的停靠点
-  double _findNextSnapDown() {
-    final current = _ac.value;
-    for (final p in _computedSnapPoints.reversed) {
-      if (p < current) return p;
-    }
-    return 0.0;
+    _flingTo(target, result.speed);
   }
 
   /// 用 fling 动画抛到目标停靠点
-  ///
-  /// 快速滑动时，面板根据速度方向被"抛"到相邻的下一个停靠点。
-  /// 使用 SpringSimulation 让面板以弹性动画到达目标，速度越大初始动能越大，
-  /// 但最终精确停在停靠点位置。
   Future<void> _flingTo(double target, double visualVelocity) async {
     final distance = (_ac.value - target).abs();
     // 如果距离目标已经很近，直接跳转，避免无意义动画
@@ -723,24 +613,11 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
       return;
     }
 
-    // 根据速度大小动态调整弹簧刚度：
-    // 速度越快 → 刚度越大 → 动画完成越快
-    final speed = visualVelocity.abs();
-    final speedFactor = (speed / 2.0).clamp(0.5, 3.0);
-
-    final spring = SpringDescription.withDampingRatio(
-      mass: 1.0,
-      stiffness: widget.spring.stiffness * speedFactor,
-      ratio: 1.0, // 临界阻尼，无回弹，到达即停止
-    );
-
-    // 使用 SpringSimulation，从当前位置以当前速度弹向目标停靠点
-    // 不使用 snapToEnd，让弹簧自然衰减到目标值，避免终点跳变
-    final simulation = SpringSimulation(
-      spring,
-      _ac.value,
-      target,
-      visualVelocity,
+    // 使用物理引擎创建弹簧模拟
+    final simulation = _physicsEngine.createSpringSimulation(
+      currentValue: _ac.value,
+      targetValue: target,
+      visualVelocity: visualVelocity,
     );
 
     await _ac.animateWith(simulation);
@@ -754,7 +631,6 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     // 缓存容器尺寸，避免每帧重复计算
-    // 使用 _cachedContainerW == 0 作为首次运行的标志
     if (_cachedContainerW == 0 || _cachedMargin != widget.margin || _cachedPadding != widget.padding) {
       _cachedMargin = widget.margin;
       _cachedPadding = widget.padding;
@@ -771,21 +647,24 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
         // ---- 主体内容 ----
         if (widget.body != null) _buildBody(_cachedContainerW, _cachedContainerH),
 
-        // ---- 背景遮罩 + 滑动面板 ----
-        if (widget.backdropEnabled || _isPanelVisible)
-          _buildBackdropAndPanel(_cachedContainerW, _cachedContainerH, _cachedContentW),
+        // ---- 背景遮罩（独立动画层）----
+        if (widget.backdropEnabled)
+          _buildBackdropLayer(_cachedContainerW, _cachedContainerH),
+
+        // ---- 滑动面板（独立动画层）----
+        if (_isPanelVisible)
+          _buildPanelLayer(_cachedContainerW, _cachedContainerH, _cachedContentW),
       ],
     );
   }
 
   Widget _buildBody(double containerW, double containerH) {
-    // 视差效果使用 RepaintBoundary 隔离重绘
+    // 视差效果使用 AnimatedBuilder 替代 ValueListenableBuilder
     if (widget.parallaxEnabled) {
-      // Positioned 必须是 Stack 的直接子元素
-      // RepaintBoundary 包裹在 SizedBox 外层，用于隔离重绘
-      return ValueListenableBuilder<double>(
-        valueListenable: _ac,
-        builder: (context, panelValue, child) {
+      return AnimatedBuilder(
+        animation: _ac,
+        builder: (context, child) {
+          final panelValue = _ac.value;
           final range = widget.maxHeight - widget.minHeight;
           final offset = widget.slideDirection == SnapPanelSlideDirection.up
               ? -panelValue * range * widget.parallaxOffset
@@ -799,7 +678,7 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
           child: SizedBox(
             width: containerW,
             height: containerH,
-            child: widget.body,  // body 不为 null 时才调用此方法
+            child: widget.body,
           ),
         ),
       );
@@ -810,101 +689,73 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
       child: SizedBox(
         width: containerW,
         height: containerH,
-        child: widget.body,  // body 不为 null 时才调用此方法
+        child: widget.body,
       ),
     );
   }
 
-  /// 合并遮罩和面板的构建
+  /// 独立遮罩动画层
   ///
-  /// 性能优化策略：
-  /// - 面板内容只构建一次，作为 ValueListenableBuilder 的 child
-  /// - 面板容器高度固定为 maxHeight，通过 Transform.translate 做纯 GPU 视觉位移
-  ///   每帧只有 transform 矩阵变化，完全不需要重新 layout 面板内部内容
-  /// - 遮罩和面板各自使用独立的 RepaintBoundary 隔离重绘
-  ///
-  /// 布局策略：
-  /// - 外层 Stack 的高度由遮罩（非定位子组件）决定，= containerH
-  /// - 面板用 Positioned(bottom:0, left:0, right:0) 定位在底部，高度固定为 maxHeight
-  ///   → Stack 中面板区域始终占 maxHeight 高，不会随动画变化
-  /// - 面板内部：RepaintBoundary → ClipRect → Transform.translate → SizedBox(maxHeight)
-  /// - Transform.translate 向下平移 (maxHeight - 当前可见高度) 将面板推入可视区
-  Widget _buildBackdropAndPanel(double containerW, double containerH, double contentW) {
-    // 面板内容只构建一次（不依赖 panelValue 的部分）
-    final Widget panelContent = _isPanelVisible
-        ? _buildPanelContentStatic(contentW)
-        : const SizedBox.shrink();
-
-    return Stack(
-      children: [
-        // ---- 背景遮罩（非定位子组件，高度固定为containerH，决定Stack总高）----
-        if (widget.backdropEnabled)
-          RepaintBoundary(
-            child: ValueListenableBuilder<double>(
-              valueListenable: _ac,
-              builder: (context, panelValue, child) {
-                final opacity = (panelValue * widget.backdropOpacity).clamp(0.0, 1.0);
-                return IgnorePointer(
-                  ignoring: opacity == 0,
-                  child: GestureDetector(
-                    onTap: widget.backdropTapClosesPanel
-                        ? () => widget.controller?.collapse()
-                        : null,
-                    child: Opacity(
-                      opacity: opacity,
-                      child: child,
-                    ),
-                  ),
-                );
-              },
-              child: Container(
-                height: containerH,
-                width: containerW,
-                color: widget.backdropColor,
-              ),
+  /// 优化：遮罩和面板分离，互不影响 rebuild
+  Widget _buildBackdropLayer(double containerW, double containerH) {
+    return AnimatedBuilder(
+      animation: _ac,
+      builder: (context, child) {
+        final opacity = (_ac.value * widget.backdropOpacity).clamp(0.0, 1.0);
+        return IgnorePointer(
+          ignoring: opacity == 0,
+          child: GestureDetector(
+            onTap: widget.backdropTapClosesPanel
+                ? () => widget.controller?.collapse()
+                : null,
+            child: Opacity(
+              opacity: opacity,
+              child: child,
             ),
           ),
+        );
+      },
+      child: RepaintBoundary(
+        child: Container(
+          height: containerH,
+          width: containerW,
+          color: widget.backdropColor,
+        ),
+      ),
+    );
+  }
 
-        // ---- 滑动面板 ----
-        // 关键约束：Positioned 必须是 Stack 的直接子元素
-        // Positioned(bottom:0, left:0, right:0, height:maxHeight) 高度固定不变
-        // 动画只通过 Transform.translate 做 GPU 位移，不触发任何 relayout
-        if (_isPanelVisible)
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            height: widget.maxHeight,
-            child: RepaintBoundary(
-              child: ValueListenableBuilder<double>(
-                valueListenable: _ac,
-                builder: (context, panelValue, child) {
-                  // 计算当前可见面板高度
-                  final panelHeight = panelValue * (widget.maxHeight - widget.minHeight) + widget.minHeight;
-                  // 向下平移距离 = maxHeight - panelHeight
-                  // panelValue=1(展开): 偏移=0; panelValue=0(收起): 偏移=maxHeight-minHeight
-                  // 此时可见的正好是底部 panelHeight 的高度
-                  final offsetY = widget.maxHeight - panelHeight;
-                  return ClipRect(
-                    child: Transform.translate(
-                      offset: Offset(0, offsetY),
-                      child: child,
-                    ),
-                  );
-                },
-                child: panelContent,
-              ),
+  /// 独立面板动画层
+  ///
+  /// 优化：面板内容只构建一次，通过 child 参数缓存
+  Widget _buildPanelLayer(double containerW, double containerH, double contentW) {
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      height: widget.maxHeight,
+      child: AnimatedBuilder(
+        animation: _ac,
+        builder: (context, child) {
+          // 计算当前可见面板高度
+          final panelHeight = _ac.value * (widget.maxHeight - widget.minHeight) + widget.minHeight;
+          // 向下平移距离 = maxHeight - panelHeight
+          final offsetY = widget.maxHeight - panelHeight;
+          return ClipRect(
+            child: Transform.translate(
+              offset: Offset(0, offsetY),
+              child: child,
             ),
-          ),
-      ],
+          );
+        },
+        child: RepaintBoundary(
+          child: _buildPanelContentStatic(contentW),
+        ),
+      ),
     );
   }
 
   /// 构建静态面板内容（只构建一次，不依赖 panelValue）
-  ///
-  /// 性能关键：此方法返回的 widget 作为外层 ValueListenableBuilder 的 child，
-  /// 在动画过程中不会被重建。收起态内容的透明度通过内部独立的
-  /// ValueListenableBuilder 更新，不影响外层 widget 树。
   Widget _buildPanelContentStatic(double contentW) {
     final stack = SizedBox(
       height: widget.maxHeight,
@@ -912,13 +763,14 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          // 展开内容
+          // 展开内容（使用缓存）
           Positioned(
             top: widget.slideDirection == SnapPanelSlideDirection.up ? 0.0 : null,
             bottom: widget.slideDirection == SnapPanelSlideDirection.down ? 0.0 : null,
             width: contentW,
             height: widget.maxHeight,
-            child: widget.panel ?? widget.panelBuilder!(_sc),
+            child: _cachedPanelContent ??=
+                (widget.panel ?? widget.panelBuilder!(_sc)),
           ),
 
           // 拖拽手柄
@@ -939,17 +791,17 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
               child: widget.header!,
             ),
 
-          // 收起态内容 - 内部独立监听动画值，不触发外层重建
+          // 收起态内容 - 内部独立监听动画值
           if (widget.collapsed != null)
             Positioned(
               top: widget.slideDirection == SnapPanelSlideDirection.up ? 0.0 : null,
               bottom: widget.slideDirection == SnapPanelSlideDirection.down ? 0.0 : null,
               width: contentW,
               height: widget.minHeight,
-              child: ValueListenableBuilder<double>(
-                valueListenable: _ac,
-                builder: (context, panelValue, child) =>
-                    _buildCollapsedWithFade(panelValue, child),
+              child: AnimatedBuilder(
+                animation: _ac,
+                builder: (context, child) =>
+                    _buildCollapsedWithFade(_ac.value, child),
                 child: widget.collapsed!,
               ),
             ),
@@ -972,28 +824,13 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   }
 
   /// 构建收起态内容的透明度动画
-  ///
-  /// 动画规则（假设停靠点为 0.0, 0.3, 1.0）：
-  /// - 0.0 ~ firstSnapPoint: opacity 从 1.0 渐变到 0.0
-  ///   - panelValue = 0.0 时 opacity = 1.0（完全不透明）
-  ///   - panelValue = firstSnapPoint 时 opacity = 0.0（完全透明）
-  /// - firstSnapPoint ~ 1.0: opacity = 0.0（不显示）
-  ///
-  /// 如果没有自定义停靠点（只有 0.0 和 1.0），则 firstSnapPoint = 1.0，
-  /// 此时在整个范围内 opacity = 1.0（与原来行为一致）
   Widget _buildCollapsedWithFade(double panelValue, Widget? child) {
-    // 使用缓存的第一个停靠点值
-    final firstSnapPoint = _cachedFirstSnapPoint;
+    final firstSnapPoint = _snapCalculator.firstSnapPoint;
 
-    // 计算透明度
     double opacity;
     if (panelValue >= firstSnapPoint) {
-      // 在第一个停靠点以上，不显示
       opacity = 0.0;
     } else {
-      // 在 0.0 ~ firstSnapPoint 之间，从1.0渐变到0.0
-      // panelValue = 0.0 时 opacity = 1.0
-      // panelValue = firstSnapPoint 时 opacity = 0.0
       opacity = 1.0 - panelValue / firstSnapPoint;
     }
     return Opacity(
@@ -1008,66 +845,41 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
       return GestureDetector(
         behavior: HitTestBehavior.translucent,
         onVerticalDragStart: (d) {
-          // 每次手势开始时重置速度追踪器和累计位移
-          _velocityTracker = VelocityTracker.withKind(PointerDeviceKind.touch);
-          _velocityTracker.addPosition(
+          _gestureEngine.reset();
+          _gestureEngine.addDragPosition(
             Duration(milliseconds: DateTime.now().millisecondsSinceEpoch),
             d.localPosition,
           );
-          _accumulatedDragDelta = 0.0;
         },
         onVerticalDragUpdate: (d) {
-          _velocityTracker.addPosition(
+          _gestureEngine.addDragPosition(
             Duration(milliseconds: DateTime.now().millisecondsSinceEpoch),
             d.localPosition,
           );
           _onGestureSlide(d.delta.dy);
         },
-        // 注意：d.velocity 在 desktop 平台上经常返回零，
-        // 所以统一用 _velocityTracker.getVelocity() 计算速度
-        onVerticalDragEnd: (d) => _onGestureEnd(_velocityTracker.getVelocity()),
+        onVerticalDragEnd: (d) => _onGestureEnd(_gestureEngine.getVelocity()),
         child: child,
       );
     } else {
       // panelBuilder 使用 Listener（与滚动联动兼容）
       return Listener(
         onPointerDown: (event) {
-          _pointerDownEvent = event;
-          _isVerticalGesture = false;
-          _accumulatedDragDelta = 0.0;
-          // 每次手势开始时重置速度追踪器，避免残留数据影响
-          _velocityTracker = VelocityTracker.withKind(PointerDeviceKind.touch);
-          _velocityTracker.addPosition(event.timeStamp, event.localPosition);
+          _gestureEngine.startGesture(event);
         },
         onPointerMove: (event) {
-          if (_pointerDownEvent == null) return;
-
-          if (!_isVerticalGesture) {
-            // 尚未确认手势方向时，用累积位移判断
-            final dx = (event.position.dx - _pointerDownEvent!.position.dx).abs();
-            final dy = (event.position.dy - _pointerDownEvent!.position.dy).abs();
-            if (dy > dx) {
-              _isVerticalGesture = true;
-              _velocityTracker.addPosition(event.timeStamp, event.localPosition);
-              _onGestureSlide(event.delta.dy);
-            }
-          } else {
-            // 已确认为垂直手势，直接追踪速度和位移
-            _velocityTracker.addPosition(event.timeStamp, event.localPosition);
+          if (_gestureEngine.updateGesture(event)) {
             _onGestureSlide(event.delta.dy);
           }
         },
         onPointerUp: (event) {
-          // 只有确认为垂直手势时才处理结束
-          if (_isVerticalGesture) {
-            _onGestureEnd(_velocityTracker.getVelocity());
+          if (_gestureEngine.isVerticalGesture) {
+            _onGestureEnd(_gestureEngine.getVelocity());
           }
-          _pointerDownEvent = null;
-          _isVerticalGesture = false;
+          _gestureEngine.endGesture();
         },
         onPointerCancel: (_) {
-          _pointerDownEvent = null;
-          _isVerticalGesture = false;
+          _gestureEngine.endGesture();
         },
         child: child,
       );
@@ -1075,8 +887,6 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   }
 
   Widget _wrapPanelDecoration(Widget child) {
-    // 用 ConstrainedBox 限制最大高度，但不强制固定高度
-    // 避免与父 SizedBox(动态 panelHeight) 产生约束冲突
     return ConstrainedBox(
       constraints: BoxConstraints(maxHeight: widget.maxHeight),
       child: Container(
@@ -1089,17 +899,50 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
     );
   }
 
-  // ==================== 控制器公开方法 ====================
+  /// 获取面板装饰（简化缓存）
+  BoxDecoration _getPanelDecoration() {
+    if (_cachedDecoration == null ||
+        _cachedBorder != widget.border ||
+        _cachedBorderRadius != widget.borderRadius ||
+        _cachedBoxShadow != widget.boxShadow ||
+        _cachedColor != widget.color ||
+        _cachedElevation != widget.elevation) {
+      _cachedBorder = widget.border;
+      _cachedBorderRadius = widget.borderRadius;
+      _cachedBoxShadow = widget.boxShadow;
+      _cachedColor = widget.color;
+      _cachedElevation = widget.elevation;
 
-  double get _panelPosition => _ac.value.clamp(0.0, 1.0);
-
-  set _panelPosition(double value) {
-    assert(value >= 0.0 && value <= 1.0);
-    _ac.value = value;
+      _cachedDecoration = BoxDecoration(
+        border: widget.border,
+        borderRadius: widget.borderRadius,
+        boxShadow: widget.boxShadow ?? _getDefaultShadow(),
+        color: widget.color,
+      );
+    }
+    return _cachedDecoration!;
   }
 
-  bool get _isAnimating => _ac.isAnimating;
-  bool get _isExpanded => _currentPanelState == SnapPanelState.expanded;
+  /// 获取默认阴影
+  List<BoxShadow> _getDefaultShadow() {
+    if (widget.elevation != null) {
+      return [
+        BoxShadow(
+          blurRadius: widget.elevation! * 2,
+          offset: Offset(0, -widget.elevation!),
+          color: Colors.black.withValues(alpha: 0.2),
+        ),
+      ];
+    }
+    return const [
+      BoxShadow(
+        blurRadius: 8.0,
+        color: Color.fromRGBO(0, 0, 0, 0.25),
+      ),
+    ];
+  }
+
+  // ==================== 控制器公开方法 ====================
 
   Future<void> _animateTo(
       double target, {
@@ -1109,13 +952,11 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
     assert(target >= 0.0 && target <= 1.0);
 
     final distance = (_ac.value - target).abs();
-    // 如果距离目标已经很近，直接跳转，避免无意义动画
     if (distance < 0.005) {
       _ac.value = target;
       return;
     }
 
-    // 如果有指定 duration，用普通动画
     if (duration != null) {
       await _ac.animateTo(
         target,
@@ -1126,10 +967,6 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
       return;
     }
 
-    // 根据距离动态计算动画时长：
-    // - 小距离（如从 2.5% → 0%）：用较短时长，避免弹簧末端微振看起来像卡顿
-    // - 大距离（如从 0% → 100%）：用较长时长，保持自然手感
-    // 使用 easeOut 曲线，让动画平滑减速到终点，无跳变
     final baseDuration = widget.animationDuration.inMilliseconds;
     final adjustedDuration = (baseDuration * (0.3 + 0.7 * distance)).round().clamp(100, baseDuration);
 
@@ -1139,22 +976,12 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
       curve: Curves.easeOutCubic,
     );
 
-    // 精确归位到目标停靠点
     _ac.value = target;
   }
 
   Future<void> _animateToSnapPoint() async {
-    if (_computedSnapPoints.length <= 2) return;
-    final current = _ac.value;
-    double nearest = _computedSnapPoints[0];
-    double minDist = double.infinity;
-    for (final p in _computedSnapPoints) {
-      final dist = (p - current).abs();
-      if (dist < minDist) {
-        minDist = dist;
-        nearest = p;
-      }
-    }
+    if (_snapCalculator.computedSnapPoints.length <= 2) return;
+    final nearest = _snapCalculator.findNearestSnap(_ac.value);
     await _animateTo(nearest);
   }
 
@@ -1169,14 +996,6 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   Future<void> _show() {
     setState(() => _isPanelVisible = true);
     return _collapse();
-  }
-
-}
-
-/// 扩展 SpringDescription 以提供便捷的 simulation 方法
-extension SpringDescriptionExtension on SpringDescription {
-  SpringSimulation simulation(double start, double end, double velocity) {
-    return SpringSimulation(this, start, end, velocity);
   }
 }
 

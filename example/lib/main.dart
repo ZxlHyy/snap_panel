@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'snap_panel_example.dart';
-import 'snap_sheet_example.dart';
 
 void main() {
   runApp(const MyApp());
@@ -47,17 +46,6 @@ class HomePage extends StatelessWidget {
                 onTap: () => Navigator.push(
                   context,
                   MaterialPageRoute(builder: (_) => const SnapPanelExample()),
-                ),
-              ),
-              const SizedBox(height: 24),
-              _NavCard(
-                title: 'SnapSheet',
-                subtitle: '轻量级底部弹出面板\n类似 iOS Maps 的交互体验',
-                icon: Icons.table_chart,
-                color: Colors.teal,
-                onTap: () => Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => const SnapSheetExample()),
                 ),
               ),
             ],
