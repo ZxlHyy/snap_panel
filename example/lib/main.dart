@@ -1,271 +1,138 @@
 import 'package:flutter/material.dart';
-import 'package:ai_panel/ai_panel.dart';
+import 'snap_panel_example.dart';
+import 'snap_sheet_example.dart';
 
 void main() {
-  runApp(const SnapPanelTestApp());
+  runApp(const MyApp());
 }
 
-class SnapPanelTestApp extends StatelessWidget {
-  const SnapPanelTestApp({super.key});
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SnapPanel 测试',
+      title:'AI Panel 示例',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorSchemeSeed: Colors.blue,
         useMaterial3: true,
       ),
-      home: const SnapPanelTestPage(),
+      home: const HomePage(),
     );
   }
 }
 
-class SnapPanelTestPage extends StatefulWidget {
-  const SnapPanelTestPage({super.key});
-
-  @override
-  State<SnapPanelTestPage> createState() => _SnapPanelTestPageState();
-}
-
-class _SnapPanelTestPageState extends State<SnapPanelTestPage> {
-  final _controller = SnapPanelController();
-  SnapPanelState _currentState = SnapPanelState.collapsed;
-  double _currentPosition = 0.0;
-
-  @override
-  void dispose() {
-    super.dispose();
-  }
+class HomePage extends StatelessWidget {
+  const HomePage({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: Column(
-        children: [
-          SnapPanel(
-            controller: _controller,
-            minHeight: 76,
-            maxHeight: MediaQuery.of(context).size.height * 0.85,
-            snapPoints: const [
-              SnapPanelSnapPoint(position: 0.6),
-              SnapPanelSnapPoint(position: 0.3),
-            ],
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-            backdropEnabled: true,
-            backdropTapClosesPanel: true,
-            // renderPanelSheet: false,
-            // parallaxEnabled: true,
-            backdropOpacity: 0.8,
-            backdropColor: Colors.black,
-            dragHandle: const SnapPanelDragHandle(),
-            defaultState: SnapPanelState.collapsed,
-            animationDuration: const Duration(milliseconds: 300),
-            animationCurve: Curves.easeOutCubic,
-            onPanelSlide: (pos) {
-              setState(() => _currentPosition = pos);
-            },
-            onPanelStateChanged: (state) {
-              setState(() => _currentState = state);
-            },
-            // ---- 主体内容 ----
-            body: Stack(
-              children: [
-                // 模拟地图背景
-                Container(
-                  decoration: const BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
-                    ),
-                  ),
-                ),
-                // 状态信息面板
-                Positioned(
-                  top: MediaQuery.of(context).padding.top + 16,
-                  left: 16,
-                  right: 16,
-                  child: _buildInfoCard(),
-                ),
-                // 操作按钮
-                Positioned(
-                  bottom: 120,
-                  left: 0,
-                  right: 0,
-                  child: _buildActionButtons(),
-                ),
-              ],
-            ),
-            // ---- 收起态 ----
-            collapsed: _buildCollapsedBar(),
-            // ---- 展开内容 ----
-            panelBuilder: (scrollCtrl) => _buildPanelContent(scrollCtrl),
-          ),
-        ],
+      appBar: AppBar(
+        title: const Text('AI Panel 示例'),
+        centerTitle: true,
       ),
-    );
-  }
-
-  Widget _buildInfoCard() {
-    return Card(
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text(
-              'SnapPanel 测试面板',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              '状态: ${_stateText(_currentState)}',
-              style: const TextStyle(fontSize: 14),
-            ),
-            Text(
-              '位置: ${(_currentPosition * 100).toStringAsFixed(1)}%',
-              style: const TextStyle(fontSize: 14),
-            ),
-            Text(
-              '停靠点: 0% → 30% → 60% → 100%',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildActionButtons() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        alignment: WrapAlignment.center,
-        children: [
-          _actionChip('收起', () => _controller.collapse()),
-          _actionChip('30%', () => _controller.animateTo(0.3)),
-          _actionChip('60%', () => _controller.animateTo(0.6)),
-          _actionChip('展开', () => _controller.expand()),
-          _actionChip('隐藏', () => _controller.hide()),
-          _actionChip('显示', () => _controller.show()),
-        ],
-      ),
-    );
-  }
-
-  Widget _actionChip(String label, VoidCallback onTap) {
-    return ActionChip(
-      label: Text(label),
-      onPressed: onTap,
-      backgroundColor: Colors.white,
-      side: const BorderSide(color: Colors.blue),
-    );
-  }
-
-  Widget _buildCollapsedBar() {
-    return Container(
-      height: 80,
-      decoration: BoxDecoration(
-        color: Colors.blue[600],
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 8,
-            offset: const Offset(0, -2),
-          ),
-        ],
-      ),
-      child: const Center(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.keyboard_arrow_up, color: Colors.white, size: 28),
-            SizedBox(width: 8),
-            Text(
-              '上滑展开面板',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPanelContent(ScrollController scrollCtrl) {
-    return Column(
-      children: [
-        // 顶部拖拽区域
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 8),
+      body: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const SizedBox(height: 12),
-              Text(
-                '列表示例',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.grey[800],
+              _NavCard(
+                title: 'SnapPanel',
+                subtitle: '高度可定制的滑动面板组件\n支持停靠点、背景遮罩、视差效果等',
+                icon: Icons.view_agenda,
+                color: Colors.blue,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SnapPanelExample()),
                 ),
               ),
-              const SizedBox(height: 4),
-              Text(
-                '共 50 条数据，支持滚动',
-                style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+              const SizedBox(height: 24),
+              _NavCard(
+                title: 'SnapSheet',
+                subtitle: '轻量级底部弹出面板\n类似 iOS Maps 的交互体验',
+                icon: Icons.table_chart,
+                color: Colors.teal,
+                onTap: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SnapSheetExample()),
+                ),
               ),
             ],
           ),
         ),
-        const Divider(height: 1),
-        // 滚动列表
-        Expanded(
-          child: ListView.builder(
-            controller: scrollCtrl,
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            itemCount: 50,
-            itemBuilder: (ctx, i) => ListTile(
-              leading: CircleAvatar(
-                backgroundColor: Colors.blue[100],
-                child: Text('${i + 1}', style: TextStyle(color: Colors.blue[800])),
-              ),
-              title: Text('列表项 ${i + 1}'),
-              subtitle: Text('这是第 ${i + 1} 条数据的描述信息'),
-              trailing: const Icon(Icons.chevron_right),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('点击了列表项 ${i + 1}'),
-                    duration: const Duration(seconds: 1),
-                  ),
-                );
-              },
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
+}
 
-  String _stateText(SnapPanelState state) {
-    switch (state) {
-      case SnapPanelState.collapsed:
-        return '收起 (collapsed)';
-      case SnapPanelState.half:
-        return '半开 (half)';
-      case SnapPanelState.expanded:
-        return '展开 (expanded)';
-    }
+class _NavCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _NavCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Row(
+            children: [
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(icon, color: color, size: 28),
+              ),
+              const SizedBox(width: 20),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: Colors.grey[600],
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right, color: Colors.grey[400]),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
