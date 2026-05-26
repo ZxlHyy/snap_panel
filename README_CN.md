@@ -118,8 +118,6 @@ spring: SnapPanelSpring(
 ```
 lib/
 ├── src/
-│   ├── widget/
-│   │   └── snap_panel.dart        # 主组件
 │   └── engine/
 │       ├── snap_calculator.dart   # 停靠点计算器
 │       ├── physics_engine.dart    # 物理引擎
