@@ -6,7 +6,7 @@ A highly customizable Flutter sliding panel component, similar to iOS Maps-style
 
 [![pub package](https://img.shields.io/pub/v/snap_panel.svg)](https://pub.dev/packages/snap_panel)
 
-![示例](https://raw.githubusercontent.com/ZxlHyy/snap_panel/main/images/snap_panel_20260615.gif)
+![示例](https://raw.githubusercontent.com/ZxlHyy/snap_panel/master/images/snap_panel_20260615.gif)
 
 ## Features / 特性
 
