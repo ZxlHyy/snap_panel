@@ -1,5 +1,7 @@
 ## 0.0.1
 
+> 更新日志[CHANGELOG_CN.md](CHANGELOG_CN.md)
+
 * Initial release of snap_panel
 * SnapPanel: Highly customizable sliding panel with multi-snap points
 * SnapPanelController: Programmatic control (expand, collapse, animateTo)

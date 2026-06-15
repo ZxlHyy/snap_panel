@@ -2,7 +2,7 @@
 
 高度可定制的 Flutter 滑动面板组件，类似 iOS Maps 风格的底部抽屉。
 
-> 完整的双语文档请查看 [README.md](../README.md)
+> 完整的双语文档请查看 [README.md](README.md)
 
 ## 特性
 

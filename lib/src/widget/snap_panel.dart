@@ -12,6 +12,7 @@ import '../engine/gesture_engine.dart';
 enum SnapPanelSlideDirection {
   /// 从底部向上滑出
   up,
+
   /// 从顶部向下滑出
   down,
 }
@@ -20,8 +21,10 @@ enum SnapPanelSlideDirection {
 enum SnapPanelState {
   /// 收起状态（minHeight）
   collapsed,
+
   /// 半开状态（snapPoint 或中间位置）
   half,
+
   /// 完全打开状态（maxHeight）
   expanded,
 }
@@ -63,10 +66,10 @@ class SnapPanelSpring {
   });
 
   SpringDescription get description => SpringDescription.withDampingRatio(
-    mass: mass,
-    stiffness: stiffness,
-    ratio: dampingRatio,
-  );
+        mass: mass,
+        stiffness: stiffness,
+        ratio: dampingRatio,
+      );
 }
 
 // ==================== 回调类型定义 ====================
@@ -79,9 +82,9 @@ typedef SnapPanelStateCallback = void Function(SnapPanelState state);
 
 /// 面板滚动联动回调，用于自定义滚动与面板拖拽的联动逻辑
 typedef SnapPanelScrollLinkCallback = bool Function(
-    ScrollController controller,
-    double dragDelta,
-    );
+  ScrollController controller,
+  double dragDelta,
+);
 
 // ==================== 面板控制器 ====================
 
@@ -140,10 +143,10 @@ class SnapPanelController {
 
   /// 动画到指定位置（0.0 ~ 1.0）
   Future<void> animateTo(
-      double position, {
-        Duration? duration,
-        Curve curve = Curves.easeOutCubic,
-      }) {
+    double position, {
+    Duration? duration,
+    Curve curve = Curves.easeOutCubic,
+  }) {
     _assertAttached();
     return _state!._animateTo(
       position,
@@ -341,19 +344,20 @@ class SnapPanel extends StatefulWidget {
     this.onPanelHalf,
     this.onScrollLink,
   })  : assert(panel != null || panelBuilder != null,
-  'panel 和 panelBuilder 不能同时为 null'),
+            'panel 和 panelBuilder 不能同时为 null'),
         assert(minHeight >= 0, 'minHeight 不能为负数'),
         assert(maxHeight > minHeight, 'maxHeight 必须大于 minHeight'),
         assert(backdropOpacity >= 0.0 && backdropOpacity <= 1.0,
-        'backdropOpacity 必须在 0.0 ~ 1.0 之间'),
+            'backdropOpacity 必须在 0.0 ~ 1.0 之间'),
         assert(parallaxOffset >= 0.0 && parallaxOffset <= 1.0,
-        'parallaxOffset 必须在 0.0 ~ 1.0 之间');
+            'parallaxOffset 必须在 0.0 ~ 1.0 之间');
 
   @override
   State<SnapPanel> createState() => _SnapPanelState();
 }
 
-class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMixin {
+class _SnapPanelState extends State<SnapPanel>
+    with SingleTickerProviderStateMixin {
   late AnimationController _ac;
   late ScrollController _sc;
 
@@ -362,6 +366,9 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
 
   /// 内部滚动是否启用
   bool _scrollingEnabled = false;
+
+  /// 当前手势是否实际移动过面板
+  bool _gestureMovedPanel = false;
 
   // ==================== 引擎实例 ====================
 
@@ -431,7 +438,8 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
     // 默认状态变化时更新
     if (oldWidget.defaultState != widget.defaultState && mounted) {
       final targetValue = _snapCalculator.stateToValue(widget.defaultState);
-      _ac.animateTo(targetValue, duration: widget.animationDuration, curve: widget.animationCurve);
+      _ac.animateTo(targetValue,
+          duration: widget.animationDuration, curve: widget.animationCurve);
     }
 
     // 控制器变化时重新绑定
@@ -524,9 +532,16 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   void _onScrollChange() {
     // 当面板展开且内部滚动禁用时，阻止内部滚动
     if (widget.isDraggable && !_scrollingEnabled && _sc.hasClients) {
-      if (_sc.offset > 0) {
-        _sc.jumpTo(0);
-      }
+      _pinScrollToTop();
+    }
+  }
+
+  void _pinScrollToTop() {
+    if (!_sc.hasClients) return;
+
+    final top = _sc.position.minScrollExtent;
+    if ((_sc.offset - top).abs() > 0.5) {
+      _sc.jumpTo(top);
     }
   }
 
@@ -537,11 +552,17 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
     _gestureEngine.addDragDelta(dy);
 
     if (!_scrollingEnabled) {
+      _pinScrollToTop();
+
       final delta = dy / (widget.maxHeight - widget.minHeight);
+      final oldValue = _ac.value;
       if (widget.slideDirection == SnapPanelSlideDirection.up) {
         _ac.value = (_ac.value - delta).clamp(0.0, 1.0);
       } else {
         _ac.value = (_ac.value + delta).clamp(0.0, 1.0);
+      }
+      if ((_ac.value - oldValue).abs() > 0.0001) {
+        _gestureMovedPanel = true;
       }
     }
 
@@ -551,24 +572,34 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
         final shouldScroll = widget.onScrollLink!(_sc, dy);
         if (shouldScroll != _scrollingEnabled) {
           setState(() => _scrollingEnabled = shouldScroll);
+          if (!shouldScroll) {
+            _pinScrollToTop();
+          }
         }
       } else {
         // 默认逻辑：上滑启用内部滚动，下滑禁用
         final shouldScroll = dy < 0;
         if (shouldScroll != _scrollingEnabled) {
           setState(() => _scrollingEnabled = shouldScroll);
+          if (!shouldScroll) {
+            _pinScrollToTop();
+          }
         }
       }
     }
   }
 
   void _onGestureEnd(Velocity velocity) {
-    if (_ac.isAnimating) return;
-    if (_isExpanded && _scrollingEnabled) return;
+    if (_ac.isAnimating) {
+      _gestureEngine.resetAccumulatedDelta();
+      _gestureMovedPanel = false;
+      return;
+    }
 
     final dy = velocity.pixelsPerSecond.dy;
     final panelRange = widget.maxHeight - widget.minHeight;
-    final currentValue = _ac.value;
+    final currentValue = _panelPosition;
+    final panelMoved = _gestureMovedPanel || !_isAtSnapPoint(currentValue);
 
     // 使用物理引擎计算方向和速度
     final result = _physicsEngine.calculateDirection(
@@ -576,20 +607,43 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
       panelRange: panelRange,
       accumulatedDragDelta: _gestureEngine.accumulatedDragDelta,
       slideDirection: widget.slideDirection,
+      velocityThreshold: widget.flingVelocity / panelRange,
     );
 
     // 重置累计位移
     _gestureEngine.resetAccumulatedDelta();
+    _gestureMovedPanel = false;
 
-    if (result.direction == 0) return;
+    // 纯内部列表滚动不驱动面板吸附
+    if (!panelMoved && _scrollingEnabled && _sc.hasClients && _sc.offset > 0) {
+      return;
+    }
 
-    // 根据方向找目标停靠点
-    final target = _snapCalculator.findTargetSnap(currentValue, result.direction);
+    final double target;
+    final double speed;
+    if (result.direction == 0) {
+      // 速度和位移都很小时，仍然按当前位置吸附到最近停靠点，避免停在中间
+      target = _snapCalculator.findNearestSnap(currentValue);
+      speed = 0.0;
+    } else {
+      // 根据方向找目标停靠点
+      target = _snapCalculator.findTargetSnap(currentValue, result.direction);
+      speed = result.speed;
+    }
 
     // 如果目标就是当前位置（已到边界），不做任何动画
-    if ((target - currentValue).abs() < 0.01) return;
+    if ((target - currentValue).abs() < 0.01) {
+      _ac.value = target;
+      return;
+    }
 
-    _flingTo(target, result.speed);
+    _flingTo(target, speed);
+  }
+
+  bool _isAtSnapPoint(double value) {
+    return _snapCalculator.computedSnapPoints.any(
+      (point) => (point - value).abs() < 0.01,
+    );
   }
 
   /// 用 fling 动画抛到目标停靠点
@@ -619,7 +673,9 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   @override
   Widget build(BuildContext context) {
     // 缓存容器尺寸，避免每帧重复计算
-    if (_cachedContainerW == 0 || _cachedMargin != widget.margin || _cachedPadding != widget.padding) {
+    if (_cachedContainerW == 0 ||
+        _cachedMargin != widget.margin ||
+        _cachedPadding != widget.padding) {
       _cachedMargin = widget.margin;
       _cachedPadding = widget.padding;
       final containerSize = MediaQuery.of(context).size;
@@ -633,7 +689,8 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
     return Stack(
       children: [
         // ---- 主体内容 ----
-        if (widget.body != null) _buildBody(_cachedContainerW, _cachedContainerH),
+        if (widget.body != null)
+          _buildBody(_cachedContainerW, _cachedContainerH),
 
         // ---- 背景遮罩（独立动画层）----
         if (widget.backdropEnabled)
@@ -641,7 +698,8 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
 
         // ---- 滑动面板（独立动画层）----
         if (_isPanelVisible)
-          _buildPanelLayer(_cachedContainerW, _cachedContainerH, _cachedContentW),
+          _buildPanelLayer(
+              _cachedContainerW, _cachedContainerH, _cachedContentW),
       ],
     );
   }
@@ -716,7 +774,8 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   /// 独立面板动画层
   ///
   /// 优化：面板内容只构建一次，通过 child 参数缓存
-  Widget _buildPanelLayer(double containerW, double containerH, double contentW) {
+  Widget _buildPanelLayer(
+      double containerW, double containerH, double contentW) {
     return Positioned(
       left: 0,
       right: 0,
@@ -726,7 +785,9 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
         animation: _ac,
         builder: (context, child) {
           // 计算当前可见面板高度
-          final panelHeight = _ac.value * (widget.maxHeight - widget.minHeight) + widget.minHeight;
+          final panelHeight =
+              _ac.value * (widget.maxHeight - widget.minHeight) +
+                  widget.minHeight;
           // 向下平移距离 = maxHeight - panelHeight
           final offsetY = widget.maxHeight - panelHeight;
           return ClipRect(
@@ -753,8 +814,12 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
         children: [
           // 展开内容（使用缓存）
           Positioned(
-            top: widget.slideDirection == SnapPanelSlideDirection.up ? 0.0 : null,
-            bottom: widget.slideDirection == SnapPanelSlideDirection.down ? 0.0 : null,
+            top: widget.slideDirection == SnapPanelSlideDirection.up
+                ? 0.0
+                : null,
+            bottom: widget.slideDirection == SnapPanelSlideDirection.down
+                ? 0.0
+                : null,
             width: contentW,
             height: widget.maxHeight,
             child: _cachedPanelContent ??=
@@ -764,8 +829,12 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
           // 拖拽手柄
           if (widget.dragHandle != null)
             Positioned(
-              top: widget.slideDirection == SnapPanelSlideDirection.up ? 0.0 : null,
-              bottom: widget.slideDirection == SnapPanelSlideDirection.down ? 0.0 : null,
+              top: widget.slideDirection == SnapPanelSlideDirection.up
+                  ? 0.0
+                  : null,
+              bottom: widget.slideDirection == SnapPanelSlideDirection.down
+                  ? 0.0
+                  : null,
               width: contentW,
               child: widget.dragHandle!,
             ),
@@ -773,8 +842,12 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
           // Header
           if (widget.header != null)
             Positioned(
-              top: widget.slideDirection == SnapPanelSlideDirection.up ? 0.0 : null,
-              bottom: widget.slideDirection == SnapPanelSlideDirection.down ? 0.0 : null,
+              top: widget.slideDirection == SnapPanelSlideDirection.up
+                  ? 0.0
+                  : null,
+              bottom: widget.slideDirection == SnapPanelSlideDirection.down
+                  ? 0.0
+                  : null,
               width: contentW,
               child: widget.header!,
             ),
@@ -782,8 +855,12 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
           // 收起态内容 - 内部独立监听动画值
           if (widget.collapsed != null)
             Positioned(
-              top: widget.slideDirection == SnapPanelSlideDirection.up ? 0.0 : null,
-              bottom: widget.slideDirection == SnapPanelSlideDirection.down ? 0.0 : null,
+              top: widget.slideDirection == SnapPanelSlideDirection.up
+                  ? 0.0
+                  : null,
+              bottom: widget.slideDirection == SnapPanelSlideDirection.down
+                  ? 0.0
+                  : null,
               width: contentW,
               height: widget.minHeight,
               child: AnimatedBuilder(
@@ -834,6 +911,7 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
         behavior: HitTestBehavior.translucent,
         onVerticalDragStart: (d) {
           _gestureEngine.reset();
+          _gestureMovedPanel = false;
           _gestureEngine.addDragPosition(
             Duration(milliseconds: DateTime.now().millisecondsSinceEpoch),
             d.localPosition,
@@ -853,6 +931,7 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
       // panelBuilder 使用 Listener（与滚动联动兼容）
       return Listener(
         onPointerDown: (event) {
+          _gestureMovedPanel = false;
           _gestureEngine.startGesture(event);
         },
         onPointerMove: (event) {
@@ -867,6 +946,7 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
           _gestureEngine.endGesture();
         },
         onPointerCancel: (_) {
+          _gestureMovedPanel = false;
           _gestureEngine.endGesture();
         },
         child: child,
@@ -933,10 +1013,10 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
   // ==================== 控制器公开方法 ====================
 
   Future<void> _animateTo(
-      double target, {
-        Duration? duration,
-        Curve curve = Curves.easeOutCubic,
-      }) async {
+    double target, {
+    Duration? duration,
+    Curve curve = Curves.easeOutCubic,
+  }) async {
     assert(target >= 0.0 && target <= 1.0);
 
     final distance = (_ac.value - target).abs();
@@ -956,7 +1036,9 @@ class _SnapPanelState extends State<SnapPanel> with SingleTickerProviderStateMix
     }
 
     final baseDuration = widget.animationDuration.inMilliseconds;
-    final adjustedDuration = (baseDuration * (0.3 + 0.7 * distance)).round().clamp(100, baseDuration);
+    final adjustedDuration = (baseDuration * (0.3 + 0.7 * distance))
+        .round()
+        .clamp(100, baseDuration);
 
     await _ac.animateTo(
       target,
