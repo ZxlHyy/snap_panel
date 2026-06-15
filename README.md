@@ -4,6 +4,10 @@ A highly customizable Flutter sliding panel component, similar to iOS Maps-style
 
 高度可定制的 Flutter 滑动面板组件，类似 iOS Maps 风格的底部抽屉。
 
+[![pub package](https://img.shields.io/pub/v/snap_panel.svg)](https://pub.dev/packages/snap_panel)
+
+![示例](https://raw.githubusercontent.com/ZxlHyy/snap_panel/main/images/snap_panel_20260615.gif)
+
 ## Features / 特性
 
 **English:**
