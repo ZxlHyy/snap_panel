@@ -1,4 +1,4 @@
-## 0.0.1
+## 0.0.2
 
 > 更新日志[CHANGELOG_CN.md](CHANGELOG_CN.md)
 

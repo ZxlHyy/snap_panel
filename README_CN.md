@@ -18,7 +18,7 @@
 
 ```yaml
 dependencies:
-  snap_panel: ^0.0.1
+  snap_panel: ^0.0.2
 ```
 
 ## 快速开始

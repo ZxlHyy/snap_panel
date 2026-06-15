@@ -1,6 +1,6 @@
 name: snap_panel
 description: "A highly customizable sliding panel component for Flutter, supporting multi-snap points, drag gestures, spring animations, and scroll linkage."
-version: 0.0.1
+version: 0.0.2
 homepage: https://gitee.com/wodexiaohouzi/snap_panel
 repository: https://gitee.com/wodexiaohouzi/snap_panel
 issue_tracker: https://gitee.com/wodexiaohouzi/snap_panel/issues
