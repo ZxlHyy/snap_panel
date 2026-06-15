@@ -32,7 +32,7 @@ A highly customizable Flutter sliding panel component, similar to iOS Maps-style
 
 ```yaml
 dependencies:
-  snap_panel: ^0.0.3
+  snap_panel: ^0.0.4
 ```
 
 ## Quick Start / 快速开始
